@@ -1,0 +1,118 @@
+{
+	"info": {
+		"_postman_id": "b33d5122-10f3-4fe0-a2d8-dc613bf77741",
+		"name": "Senior Project",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Add JSON - Ferngully",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"Title\": \"FernGully: The Last Rainforest\",\n    \"Year\": \"1992\",\n    \"Rated\": \"G\",\n    \"Released\": \"10 Apr 1992\",\n    \"Runtime\": \"76 min\",\n    \"Genre\": \"Animation, Adventure, Family, Fantasy\",\n    \"Director\": \"Bill Kroyer\",\n    \"Writer\": \"Jim Cox (screenplay), Diana Young (original stories)\",\n    \"Actors\": \"Tim Curry, Samantha Mathis, Christian Slater, Jonathan Ward\",\n    \"Plot\": \"The magical inhabitants of a rainforest fight to save their home, which is threatened by logging and a polluting force of destruction called Hexxus.\",\n    \"Language\": \"English\",\n    \"Country\": \"Australia, USA\",\n    \"Awards\": \"3 wins & 1 nomination.\",\n    \"Poster\": \"https://m.media-amazon.com/images/M/MV5BNzNiNTliMjItMmY0ZS00YTMzLTllYTQtMzE2ZDM1YTgwZjlmL2ltYWdlL2ltYWdlXkEyXkFqcGdeQXVyMTEwMTkwOTI@._V1_SX300.jpg\",\n    \"Ratings\": [\n        {\n            \"Source\": \"Internet Movie Database\",\n            \"Value\": \"6.5/10\"\n        },\n        {\n            \"Source\": \"Rotten Tomatoes\",\n            \"Value\": \"63%\"\n        },\n        {\n            \"Source\": \"Metacritic\",\n            \"Value\": \"67/100\"\n        }\n    ],\n    \"Metascore\": \"67\",\n    \"imdbRating\": \"6.5\",\n    \"imdbVotes\": \"25,314\",\n    \"imdbID\": \"tt0104254\",\n    \"Type\": \"movie\",\n    \"DVD\": \"18 Feb 2002\",\n    \"BoxOffice\": \"N/A\",\n    \"Production\": \"Fox\",\n    \"Website\": \"N/A\",\n    \"Response\": \"True\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/write_json",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"write_json"
+					]
+				},
+				"description": "writes the object to the database"
+			},
+			"response": []
+		},
+		{
+			"name": "Search OMDB - Ferngully",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/search/ferngully",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"search",
+						"ferngully"
+					]
+				},
+				"description": "search OMDB for item (In this case Ferngully)"
+			},
+			"response": []
+		},
+		{
+			"name": "Sucessful get JSON - Ferngully",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/query_json/tt0104254",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"query_json",
+						"tt0104254"
+					]
+				},
+				"description": "This should get the Ferngully JSON object"
+			},
+			"response": []
+		},
+		{
+			"name": "Unsuccessful get JSON",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/query_json/tt",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"query_json",
+						"tt"
+					]
+				},
+				"description": "This should fail to get any JSON, and fail gracefully."
+			},
+			"response": []
+		},
+		{
+			"name": "Get Video - Ferngully",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:5000/video/Ferngully.m4v",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"video",
+						"Ferngully.m4v"
+					]
+				},
+				"description": "Will send back too big of a request, don't try to download, will crash Postman"
+			},
+			"response": []
+		}
+	],
+	"protocolProfileBehavior": {}
+}
