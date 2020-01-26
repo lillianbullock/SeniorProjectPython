@@ -10,7 +10,13 @@ import requests
 import json
 from pymongo import MongoClient
 
+# TODO change from all access to whitelisting
+from flask import Flask
+from flask_cors import CORS
+
 APP = Flask(__name__)
+CORS(APP)
+
 MEDIA_PATH = '/Users/brookebullock/Movies'
 
 @APP.route('/')
@@ -24,10 +30,30 @@ def serve_video(vid_name):
     resp.headers['Content-Disposition'] = 'inline'
     return resp
 
-@APP.route('/search/<name>', methods=["GET"])
-def search(name):
+@APP.route('/search', methods=["GET"])
+def search():
+    title = request.args.get('title', None)
+    year = request.args.get('year', None)
+    imdbID  = request.args.get('id', None)
 
-    omdb_response = requests.get(f"http://www.omdbapi.com/?apikey=1e93b34f&t={name}")
+    print(f"{title}  {year}  {imdbID}")
+
+    url = "http://www.omdbapi.com/?apikey=1e93b34f"
+
+    if imdbID != None:
+        url += f"&i={imdbID}"
+    elif title != None:
+        url += f"&t={title}"
+        if imdbID != None:
+            url += f"&y={year}"
+    else:
+        # they didn't give us the data, so they get nothing back
+        return Response(
+            response="400: no arguments given",
+            status=400
+        ) 
+
+    omdb_response = requests.get(url)
     print(omdb_response.status_code)
     print()
 
