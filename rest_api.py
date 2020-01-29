@@ -41,10 +41,12 @@ def search():
     url = "http://www.omdbapi.com/?apikey=1e93b34f"
 
     if imdbID != None:
+        # TODO check form of ID (regular expression??)
         url += f"&i={imdbID}"
     elif title != None:
         url += f"&t={title}"
         if imdbID != None:
+            # TODO check this is number
             url += f"&y={year}"
     else:
         # they didn't give us the data, so they get nothing back
