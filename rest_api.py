@@ -132,8 +132,38 @@ def write_to_mongo():
 
     return response
 
+@APP.route('/browse')
+def browse():
+    #connect to the mongo client
+    client = MongoClient()
+    client = MongoClient('localhost', 27017)
+    db = client.senior_project
+
+    imdbID = 'tt0104254'
+
+    obj = db.movies.find_one({'imdbID': imdbID}, {'_id'})
+    # print("Print\n", obj["Title"])
+
+    print(obj)
+
+    # https://stackoverflow.com/questions/11961952/objectid-object-has-no-attribute-gettimestamp
+    print("Time of creation", obj['_id'].generation_time)
+
+    client.close()
+
+    # if obj:
+    #     return Response(
+    #         mimetype="application/json",
+    #         response=json.dumps(obj),
+    #         status=200
+    #     )
+    # else:
+    #     return Response(
+    #         status=404
+    #     )
+
 @APP.route('/query_json/<imdbID>')
-def read_from_mondo(imdbID):
+def read_from_mongo(imdbID):
 
     #connect to the mongo client
     client = MongoClient()
