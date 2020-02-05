@@ -9,6 +9,7 @@ from flask import Flask, send_file, make_response, Response, request
 import requests
 import json
 from pymongo import MongoClient
+import datetime
 
 # TODO change from all access to whitelisting
 from flask import Flask
@@ -107,7 +108,9 @@ def write_to_mongo():
         #"Path"  :        MEDIA_PATH + relative-path
         "Genre" :       obj["Genre"],
         "Production" :  obj["Production"],
-        "Ratings" :     obj["Ratings"]
+        "Ratings" :     obj["Ratings"],
+        "DateAdded" :   datetime.datetime.utcnow(),
+        "LastChanged" :   datetime.datetime.utcnow(), #allow for an update endpoint to exist
     }   
 
     if (db.movies.find_one({'imdbID': obj["imdbID"]})):
@@ -139,28 +142,36 @@ def browse():
     client = MongoClient('localhost', 27017)
     db = client.senior_project
 
-    imdbID = 'tt0104254'
+    obj = db.movies.find().sort("name", -1)
 
-    obj = db.movies.find_one({'imdbID': imdbID}, {'_id'})
-    # print("Print\n", obj["Title"])
+    # sortkey = {"DateAdded", -1} 
+    findkey = { }
+    displaykey = { "_id": 0, "DateAdded": 0}
 
-    print(obj)
+    obj = db.movies.find(findkey, displaykey).sort("DateAdded", -1).limit(2)
+
+    retObj = []
+
+    for x in obj:
+        print(x["Title"])
+        retObj.append(x)
+
 
     # https://stackoverflow.com/questions/11961952/objectid-object-has-no-attribute-gettimestamp
-    print("Time of creation", obj['_id'].generation_time)
+    # print("Time of creation", obj['_id'].generation_time)
 
     client.close()
 
-    # if obj:
-    #     return Response(
-    #         mimetype="application/json",
-    #         response=json.dumps(obj),
-    #         status=200
-    #     )
-    # else:
-    #     return Response(
-    #         status=404
-    #     )
+    if obj:
+        return Response(
+            mimetype="application/json",
+            response=json.dumps(retObj),
+            status=200,
+        )
+    else:
+        return Response(
+            status=404,
+        )
 
 @APP.route('/query_json/<imdbID>')
 def read_from_mongo(imdbID):
