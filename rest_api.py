@@ -137,6 +137,30 @@ def write_to_mongo():
 
 @APP.route('/browse')
 def browse():
+
+    title = "Fern" #request.args.get('title', None)
+    year = request.args.get('year', None)
+    imdbID = request.args.get('id', None)
+    rating = request.args.get('rating', None)
+
+    find_key = { }
+
+
+    if title != None:
+        # TODO check form of ID (regular expression??)
+        t_regex = f'(.*){title}(.*)' #match anything before or after string
+    # elif title != None:
+    #     url += f"&t={title}"
+    #     if imdbID != None:
+    #         # TODO check this is number
+    #         url += f"&y={year}"
+    # else:
+    #     # they didn't give us the data, so they get nothing back
+    #     return Response(
+    #         response="400: no arguments given",
+    #         status=400
+    #     ) 
+
     #connect to the mongo client
     client = MongoClient()
     client = MongoClient('localhost', 27017)
@@ -144,11 +168,14 @@ def browse():
 
     obj = db.movies.find().sort("name", -1)
 
-    # sortkey = {"DateAdded", -1} 
-    findkey = { }
-    displaykey = { "_id": 0, "DateAdded": 0}
+    find_key = {'Title': { '$regex': t_regex}}
 
-    obj = db.movies.find(findkey, displaykey).sort("DateAdded", -1).limit(2)
+    sort_field = "DateAdded"
+    sort_dir = -1
+    # find_key = { }
+    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don't parse to JSON well TODO figure this out?
+
+    obj = db.movies.find(find_key, display_key).sort(sort_field, sort_dir).limit(2)
 
     retObj = []
 
