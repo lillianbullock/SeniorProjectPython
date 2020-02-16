@@ -98,6 +98,7 @@ def write_to_mongo():
     cleaned_obj = {
         "imdbID" :      obj["imdbID"],
         "Title" :       obj["Title"],
+        "SearchTitle" : search_string(obj["Title"]),
         "Year" :        obj["Year"],
         "Released" :    obj["Released"],
         "Runtime" :     obj["Runtime"],
@@ -138,17 +139,18 @@ def write_to_mongo():
 @APP.route('/browse')
 def browse():
 
-    title = "Fern" #request.args.get('title', None)
+    title = request.args.get('title', None)
     year = request.args.get('year', None)
     imdbID = request.args.get('id', None)
     rating = request.args.get('rating', None)
 
     find_key = { }
 
+    print("filtered " , search_string(title))
 
     if title != None:
         # TODO check form of ID (regular expression??)
-        t_regex = f'(.*){title}(.*)' #match anything before or after string
+        t_regex = f'(.*){search_string(title)}(.*)' #match anything before or after string
     # elif title != None:
     #     url += f"&t={title}"
     #     if imdbID != None:
@@ -166,9 +168,9 @@ def browse():
     client = MongoClient('localhost', 27017)
     db = client.senior_project
 
-    obj = db.movies.find().sort("name", -1)
+    obj = db.movies.find().sort("Title", -1)
 
-    find_key = {'Title': { '$regex': t_regex}}
+    find_key = {'SearchTitle': { '$regex': t_regex}}
 
     sort_field = "DateAdded"
     sort_dir = -1
@@ -223,6 +225,19 @@ def read_from_mongo(imdbID):
         return Response(
             status=404
         )
+
+
+
+''' this function is to create a lowercase space-less version of the title for easier searching
+Will also be used on the search terms to normalize them'''
+def search_string(title):
+    alphanum = ""
+
+    for character in title:
+        if character.isalnum():
+            alphanum += character.lower()
+    return alphanum
+
 
 if __name__ == '__main__':
     APP.run()
