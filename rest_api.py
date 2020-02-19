@@ -10,6 +10,7 @@ import requests
 import json
 from pymongo import MongoClient
 import datetime
+import re
 
 # TODO change from all access to whitelisting
 from flask import Flask
@@ -37,8 +38,6 @@ def search():
     year = request.args.get('year', None)
     imdbID  = request.args.get('id', None)
 
-    print(f"{title}  {year}  {imdbID}")
-
     url = "http://www.omdbapi.com/?apikey=1e93b34f"
 
     if imdbID != None:
@@ -57,20 +56,18 @@ def search():
         ) 
 
     omdb_response = requests.get(url)
-    print(omdb_response.status_code)
-    print()
-
+    
     obj = omdb_response.json()
 
-    print("Title:" , obj["Title"])
+    # print("Title:" , obj["Title"])
     #print("Rating:" , obj["Rated"])
     #print("Length:" , obj["Runtime"])
     #print("Summary:" , obj["Plot"])
     #print("Released:" , obj["Released"])
-    print("ID:" , obj["imdbID"])
+    # print("ID:" , obj["imdbID"])
     #print("Poster:", obj["Poster"])
 
-    print(json.dumps(obj))
+    # print(json.dumps(obj))
 
     if omdb_response.status_code == 200:
         return Response(
@@ -111,14 +108,12 @@ def write_to_mongo():
         "Production" :  obj["Production"],
         "Ratings" :     obj["Ratings"],
         "DateAdded" :   datetime.datetime.utcnow(),
-        "LastChanged" :   datetime.datetime.utcnow(), #allow for an update endpoint to exist
+        "LastChanged" : datetime.datetime.utcnow(), #allow for an update endpoint to exist
     }   
 
     if (db.movies.find_one({'imdbID': obj["imdbID"]})):
-        print("found")
         db_response = db.movies.update_one({'imdbID': obj["imdbID"]}, {"$set": cleaned_obj })
     else:
-        print("not_found")
         db_response = db.movies.insert_one(cleaned_obj)
 
     client.close()
@@ -141,57 +136,62 @@ def browse():
 
     title = request.args.get('title', None)
     year = request.args.get('year', None)
-    imdbID = request.args.get('id', None)
+    imdb_id = request.args.get('id', None)
     rating = request.args.get('rating', None)
 
     find_key = { }
 
-    print("filtered " , search_string(title))
+    err = None #if problem with search terms change value
 
-    if title != None:
-        # TODO check form of ID (regular expression??)
-        t_regex = f'(.*){search_string(title)}(.*)' #match anything before or after string
-    # elif title != None:
-    #     url += f"&t={title}"
-    #     if imdbID != None:
-    #         # TODO check this is number
-    #         url += f"&y={year}"
-    # else:
-    #     # they didn't give us the data, so they get nothing back
-    #     return Response(
-    #         response="400: no arguments given",
-    #         status=400
-    #     ) 
+    # print("filtered " , search_string(title))
+
+    # either imdb_id OR title is required, if title; rating and year can also be added
+    if imdb_id != None:
+        if re.match('tt\d{7}', imdb_id):
+            #https://regex101.com/r/ImE8BV/1/ - regex testing site
+            find_key = [{'imdbID': imdb_id}]
+        else: 
+            err = "Invalid imdb ID"
+    elif title != None:
+        find_key = [{'SearchTitle': { '$regex': title}}]
+        
+        if year != None:
+            if not year.isnumeric():
+                err = "Year must be a valid number"
+            find_key.append({'Year' : year})
+
+        if rating != None: 
+            find_key.append({'Rated' : rating.upper()})
+    else: 
+        err = "No arguments given"
+    
+    # If there is an error value, no query to DB, just exit here
+    if err != None: 
+        return Response(
+            response=("500: " + err),
+            status=404
+        ) 
+
+    # TODO add sorting/numResults possibilities?
+    sort_field = "DateAdded"
+    sort_dir = -1
+    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don't parse to JSON well TODO figure this out?
 
     #connect to the mongo client
     client = MongoClient()
     client = MongoClient('localhost', 27017)
     db = client.senior_project
 
-    obj = db.movies.find().sort("Title", -1)
-
-    find_key = {'SearchTitle': { '$regex': t_regex}}
-
-    sort_field = "DateAdded"
-    sort_dir = -1
-    # find_key = { }
-    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don't parse to JSON well TODO figure this out?
-
-    obj = db.movies.find(find_key, display_key).sort(sort_field, sort_dir).limit(2)
-
-    retObj = []
-
-    for x in obj:
-        print(x["Title"])
-        retObj.append(x)
-
-
-    # https://stackoverflow.com/questions/11961952/objectid-object-has-no-attribute-gettimestamp
-    # print("Time of creation", obj['_id'].generation_time)
+    obj = db.movies.find({'$and':find_key}, display_key).sort(sort_field, sort_dir).limit(10) 
 
     client.close()
 
     if obj:
+        retObj = []
+        for x in obj:
+            # print(x["Title"])
+            retObj.append(x)
+
         return Response(
             mimetype="application/json",
             response=json.dumps(retObj),
@@ -210,7 +210,7 @@ def read_from_mongo(imdbID):
     client = MongoClient('localhost', 27017)
     db = client.senior_project
 
-    obj = db.movies.find_one({'imdbID': imdbID}, {'_id': False})
+    obj = db.movies.find_one({'imdbID': imdbID}, { "_id": 0, "DateAdded": 0, "LastChanged": 0 })
     # print("Print\n", obj["Title"])
 
     client.close()
