@@ -22,7 +22,7 @@ CORS(app)
 # https://towardsdatascience.com/how-to-hide-your-api-keys-in-python-fb2e1a61b0a0
 # stored in ./etc/conda/activate.d/env_vars.sh and ./etc/conda/deactivate.d/env_vars.sh
 f = open("keys/OMDB.txt","r")
-OMDB_KEY = f.read()
+OMDB_KEY = f.read() #.strip()
 f.close()
 
 # login_manager = LoginManager()
@@ -46,10 +46,9 @@ def search():
     year = request.args.get('year', None)
     imdbID  = request.args.get('id', None)
 
-    print(OMDB_KEY)
-    print()
-
     url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}"
+
+    print(url)
 
     err = None
 
