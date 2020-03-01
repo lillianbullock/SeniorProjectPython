@@ -1,0 +1,4 @@
+# ignore all logs
+
+.DS_Store
+keys/*

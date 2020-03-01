@@ -16,42 +16,63 @@ import re
 from flask import Flask
 from flask_cors import CORS
 
-APP = Flask(__name__)
-CORS(APP)
+app = Flask(__name__)
+CORS(app)
+
+# https://towardsdatascience.com/how-to-hide-your-api-keys-in-python-fb2e1a61b0a0
+# stored in ./etc/conda/activate.d/env_vars.sh and ./etc/conda/deactivate.d/env_vars.sh
+f = open("keys/OMDB.txt","r")
+OMDB_KEY = f.read()
+f.close()
+
+# login_manager = LoginManager()
 
 MEDIA_PATH = '/Users/brookebullock/Movies'
 
-@APP.route('/')
+@app.route('/')
 def hello():
     return "hello world"
 
-@APP.route('/video/<vid_name>', methods=["GET"])
+@app.route('/video/<vid_name>', methods=["GET"])
 def serve_video(vid_name):
     vid_path = os.path.join(MEDIA_PATH, vid_name)
     resp = make_response(send_file(vid_path, 'video/mp4'))
     resp.headers['Content-Disposition'] = 'inline'
     return resp
 
-@APP.route('/search', methods=["GET"])
+@app.route('/search', methods=["GET"])
 def search():
     title = request.args.get('title', None)
     year = request.args.get('year', None)
     imdbID  = request.args.get('id', None)
 
-    url = "http://www.omdbapi.com/?apikey=1e93b34f"
+    print(OMDB_KEY)
+    print()
+
+    url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}"
+
+    err = None
 
     if imdbID != None:
-        # TODO check form of ID (regular expression??)
-        url += f"&i={imdbID}"
+        if valid_imdb_id(imdbID):
+            url += f"&i={imdbID}"
+        else:
+            err = "Invalid IMDB id"
     elif title != None:
         url += f"&t={title}"
-        if imdbID != None:
-            # TODO check this is number
-            url += f"&y={year}"
+
+        if year != None:
+            if year.isnumeric():
+                url += f"&y={year}"
+            else:
+                err = "Year is not a number"
     else:
-        # they didn't give us the data, so they get nothing back
+        err = "no arguments given"
+
+    if err != None:
+        #malformed arguments
         return Response(
-            response="400: no arguments given",
+            response=f"400: {err}",
             status=400
         ) 
 
@@ -60,12 +81,12 @@ def search():
     obj = omdb_response.json()
 
     # print("Title:" , obj["Title"])
-    #print("Rating:" , obj["Rated"])
-    #print("Length:" , obj["Runtime"])
-    #print("Summary:" , obj["Plot"])
-    #print("Released:" , obj["Released"])
+    # print("Rating:" , obj["Rated"])
+    # print("Length:" , obj["Runtime"])
+    # print("Summary:" , obj["Plot"])
+    # print("Released:" , obj["Released"])
     # print("ID:" , obj["imdbID"])
-    #print("Poster:", obj["Poster"])
+    # print("Poster:", obj["Poster"])
 
     # print(json.dumps(obj))
 
@@ -81,7 +102,7 @@ def search():
             status=404
         ) 
 
-@APP.route('/write_json', methods=["POST"])
+@app.route('/write_json', methods=["POST"])
 def write_to_mongo():
 
     obj = json.loads(request.data) #get the sent object
@@ -131,7 +152,7 @@ def write_to_mongo():
 
     return response
 
-@APP.route('/browse')
+@app.route('/browse')
 def browse():
 
     title = request.args.get('title', None)
@@ -139,21 +160,19 @@ def browse():
     imdb_id = request.args.get('id', None)
     rating = request.args.get('rating', None)
 
-    find_key = { }
+    find_key = []
 
     err = None #if problem with search terms change value
 
-    # print("filtered " , search_string(title))
-
     # either imdb_id OR title is required, if title; rating and year can also be added
     if imdb_id != None:
-        if re.match('tt\d{7}', imdb_id):
+        if valid_imdb_id(imdb_id):
             #https://regex101.com/r/ImE8BV/1/ - regex testing site
-            find_key = [{'imdbID': imdb_id}]
+            find_key.append({'imdbID': imdb_id})
         else: 
             err = "Invalid imdb ID"
     elif title != None:
-        find_key = [{'SearchTitle': { '$regex': title}}]
+        find_key.append({'SearchTitle': { '$regex': title}})
         
         if year != None:
             if not year.isnumeric():
@@ -163,8 +182,8 @@ def browse():
         if rating != None: 
             find_key.append({'Rated' : rating.upper()})
     else: 
-        err = "No arguments given"
-    
+        find_key.append({}) # recently added 
+
     # If there is an error value, no query to DB, just exit here
     if err != None: 
         return Response(
@@ -175,7 +194,7 @@ def browse():
     # TODO add sorting/numResults possibilities?
     sort_field = "DateAdded"
     sort_dir = -1
-    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don't parse to JSON well TODO figure this out?
+    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don't parse to JSON TODO figure this out?
 
     #connect to the mongo client
     client = MongoClient()
@@ -189,7 +208,6 @@ def browse():
     if obj:
         retObj = []
         for x in obj:
-            # print(x["Title"])
             retObj.append(x)
 
         return Response(
@@ -202,7 +220,7 @@ def browse():
             status=404,
         )
 
-@APP.route('/query_json/<imdbID>')
+@app.route('/query_json/<imdbID>')
 def read_from_mongo(imdbID):
 
     #connect to the mongo client
@@ -211,7 +229,6 @@ def read_from_mongo(imdbID):
     db = client.senior_project
 
     obj = db.movies.find_one({'imdbID': imdbID}, { "_id": 0, "DateAdded": 0, "LastChanged": 0 })
-    # print("Print\n", obj["Title"])
 
     client.close()
 
@@ -238,6 +255,13 @@ def search_string(title):
             alphanum += character.lower()
     return alphanum
 
+'''
+Wrapper function around this operation, in case it needs to change in the future
+https://regex101.com/r/ImE8BV/1/ - regex testing site
+'''
+def valid_imdb_id(id):
+    return re.match('tt\d{7}', id)
+
 
 if __name__ == '__main__':
-    APP.run()
+    app.run()
