@@ -4,52 +4,175 @@
 # https://stackoverflow.com/questions/44621359/python-cant-serve-mp4-to-browser
 # localhost:5000/Ferngully.m4v
 
-import os
-from flask import Flask, send_file, make_response, Response, request
-import requests
-import json
+# cd Coding/SeniorProject/ActualProject/python-server/
+
+from itsdangerous import (TimedJSONWebSignatureSerializer as Serializer, BadSignature, SignatureExpired)
+from flask import Flask, send_file, make_response, Response, request, g, jsonify
+from flask_httpauth import HTTPBasicAuth
+from flask_cors import CORS
+from passlib.hash import sha256_crypt
 from pymongo import MongoClient
+
 import datetime
-import re
+import json
+import os
+import re #regex
+import requests
 
 # TODO change from all access to whitelisting
-from flask import Flask
-from flask_cors import CORS
-
 app = Flask(__name__)
 CORS(app)
 
-# https://towardsdatascience.com/how-to-hide-your-api-keys-in-python-fb2e1a61b0a0
-# stored in ./etc/conda/activate.d/env_vars.sh and ./etc/conda/deactivate.d/env_vars.sh
-f = open("keys/OMDB.txt","r")
-OMDB_KEY = f.read() #.strip()
-f.close()
+auth = HTTPBasicAuth()
 
-# login_manager = LoginManager()
+#################################################
+# Constants
+#################################################
+def read_file(file_name):
+    f = open(file_name,"r")
+    string = f.read().strip()
+    f.close()
+    return string
 
-MEDIA_PATH = '/Users/brookebullock/Movies'
+OMDB_KEY = read_file("keys/OMDB.txt")
+FLASK_KEY = read_file("keys/Flask.txt")
+MEDIA_PATH = "/Users/brookebullock/Movies"
 
-@app.route('/')
-def hello():
-    return "hello world"
+#################################################
+# Login stuff
+#################################################
+# TODO secure HTTP
 
-@app.route('/video/<vid_name>', methods=["GET"])
+#TODO figure out why this isn't working
+# https://blog.miguelgrinberg.com/post/restful-authentication-with-flask
+def generate_auth_token(user, expiration = 600):
+    s = Serializer(app.config['SECRET_KEY'], expires_in = expiration) #expires_in = number_of_seconds
+    print("hello")
+    return s.dumps({'id': "hello"})
+
+def verify_auth_token(token):
+    s = Serializer(app.config['SECRET_KEY'])
+    try:
+        data = s.loads(token)
+    except SignatureExpired:
+        return None # valid token, but expired
+    except BadSignature:
+        return None # invalid token
+    
+    user = db.users.find_one({"_id": data["_id"]})
+    client.close()
+
+    user = User.query.get(data['id'])
+    return user
+
+@auth.verify_password
+def verify_password(username_or_token, password):
+    # first try to authenticate by token
+    user = verify_auth_token(username_or_token)
+    
+    if not user:
+        #connect to the mongo client
+        client = MongoClient()
+        client = MongoClient("localhost", 27017)
+        db = client.senior_project
+
+        # try to authenticate with username/password
+        user = db.users.find_one({"Username": username_or_token})
+        client.close()
+
+        if user == None or (not sha256_crypt.verify(password, user["PasswordHash"])):
+            return False
+    g.user = user
+    return True
+
+#################################################
+# Login Related API
+#################################################
+@app.route("/user/new", methods = ["POST"])
+def new_user():
+    username = request.json.get("username")
+    password = request.json.get("password")
+
+    print("user", username)
+
+    err = None
+    if username is None or password is None:
+        return Response (
+            response=f"400: Missing arguments",
+            status=400
+        ) 
+
+    #connect to the mongo client
+    client = MongoClient()
+    client = MongoClient("localhost", 27017)
+    db = client.senior_project
+
+    if (db.users.find_one({"Username": username})):
+        return Response (
+            response=f"400: Existing user",
+            status=400
+        )
+    else:
+        pass_hash = sha256_crypt.hash(password)
+        print("hash", sha256_crypt.verify(password, pass_hash))
+
+        db_response = db.users.insert_one(
+            {"Username": username,
+            "PasswordHash": pass_hash,
+            "DateAdded" :   datetime.datetime.utcnow(),
+            "LastChanged" : datetime.datetime.utcnow(), #allow for an update endpoint to exist})
+            })
+
+    client.close()
+
+    if db_response.acknowledged:
+        response = Response(
+            response="201: user created",
+            status=201
+        )  
+    else:
+        response = Response(
+            response="500: write failed",
+            status=500
+        ) 
+
+    return response
+
+ # user = User(username = username)
+    # user.hash_password(password)
+    # db.session.add(user)
+    # db.session.commit()
+    # return jsonify({ "username": user.username }), 201, {"Location": url_for("get_user", id = user.id, _external = True)}
+
+@app.route('/get_token')
+@auth.login_required
+def get_auth_token():
+    token = generate_auth_token(g.user) #TODO change the time to longer than 10 minutes
+    return jsonify({ 'token': token.decode('ascii') })
+
+@app.route('/api/resource-test')
+@auth.login_required
+def get_resource():
+    return jsonify({ 'data': 'Hello, %s!' % g.user["Username"] })
+
+#################################################
+# API endpoints 
+#################################################
+@app.route("/video/<vid_name>", methods=["GET"])
 def serve_video(vid_name):
     vid_path = os.path.join(MEDIA_PATH, vid_name)
-    resp = make_response(send_file(vid_path, 'video/mp4'))
-    resp.headers['Content-Disposition'] = 'inline'
+    resp = make_response(send_file(vid_path, "video/mp4"))
+    resp.headers["Content-Disposition"] = "inline"
     return resp
 
-@app.route('/search', methods=["GET"])
+@app.route("/search", methods=["GET"])
+# @auth.login_required
 def search():
-    title = request.args.get('title', None)
-    year = request.args.get('year', None)
-    imdbID  = request.args.get('id', None)
+    title = request.args.get("title", None)
+    year = request.args.get("year", None)
+    imdbID  = request.args.get("id", None)
 
     url = f"http://www.omdbapi.com/?apikey={OMDB_KEY}"
-
-    print(url)
-
     err = None
 
     if imdbID != None:
@@ -101,14 +224,15 @@ def search():
             status=404
         ) 
 
-@app.route('/write_json', methods=["POST"])
+@app.route("/write_json", methods=["POST"])
+# @auth.login_required
 def write_to_mongo():
 
     obj = json.loads(request.data) #get the sent object
 
     #connect to the mongo client
     client = MongoClient()
-    client = MongoClient('localhost', 27017)
+    client = MongoClient("localhost", 27017)
     db = client.senior_project
 
     #remove extraneous data from the obj
@@ -123,7 +247,7 @@ def write_to_mongo():
         "Plot" :        obj["Plot"],
         "Poster" :      obj["Poster"],
         "Type" :        obj["Type"],
-        #"Path"  :        MEDIA_PATH + relative-path
+        "URL"  :        obj["Url"], #MEDIA_PATH + relative-path
         "Genre" :       obj["Genre"],
         "Production" :  obj["Production"],
         "Ratings" :     obj["Ratings"],
@@ -131,8 +255,8 @@ def write_to_mongo():
         "LastChanged" : datetime.datetime.utcnow(), #allow for an update endpoint to exist
     }   
 
-    if (db.movies.find_one({'imdbID': obj["imdbID"]})):
-        db_response = db.movies.update_one({'imdbID': obj["imdbID"]}, {"$set": cleaned_obj })
+    if (db.movies.find_one({"imdbID": obj["imdbID"]})):
+        db_response = db.movies.update_one({"imdbID": obj["imdbID"]}, {"$set": cleaned_obj })
     else:
         db_response = db.movies.insert_one(cleaned_obj)
 
@@ -140,7 +264,7 @@ def write_to_mongo():
 
     if db_response.acknowledged:
         response = Response(
-            response='201: obj written',
+            response="201: obj written",
             status=201
         )  
     else:
@@ -151,13 +275,13 @@ def write_to_mongo():
 
     return response
 
-@app.route('/browse')
+@app.route("/browse")
 def browse():
 
-    title = request.args.get('title', None)
-    year = request.args.get('year', None)
-    imdb_id = request.args.get('id', None)
-    rating = request.args.get('rating', None)
+    title = request.args.get("title", None)
+    year = request.args.get("year", None)
+    imdb_id = request.args.get("id", None)
+    rating = request.args.get("rating", None)
 
     find_key = []
 
@@ -167,19 +291,19 @@ def browse():
     if imdb_id != None:
         if valid_imdb_id(imdb_id):
             #https://regex101.com/r/ImE8BV/1/ - regex testing site
-            find_key.append({'imdbID': imdb_id})
+            find_key.append({"imdbID": imdb_id})
         else: 
             err = "Invalid imdb ID"
     elif title != None:
-        find_key.append({'SearchTitle': { '$regex': title}})
+        find_key.append({"SearchTitle": { "$regex": title}})
         
         if year != None:
             if not year.isnumeric():
                 err = "Year must be a valid number"
-            find_key.append({'Year' : year})
+            find_key.append({"Year" : year})
 
         if rating != None: 
-            find_key.append({'Rated' : rating.upper()})
+            find_key.append({"Rated" : rating.upper()})
     else: 
         find_key.append({}) # recently added 
 
@@ -193,14 +317,14 @@ def browse():
     # TODO add sorting/numResults possibilities?
     sort_field = "DateAdded"
     sort_dir = -1
-    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don't parse to JSON TODO figure this out?
+    display_key = { "_id": 0, "DateAdded": 0, "LastChanged": 0 } #dates don"t parse to JSON TODO figure this out?
 
     #connect to the mongo client
     client = MongoClient()
-    client = MongoClient('localhost', 27017)
+    client = MongoClient("localhost", 27017)
     db = client.senior_project
 
-    obj = db.movies.find({'$and':find_key}, display_key).sort(sort_field, sort_dir).limit(10) 
+    obj = db.movies.find({"$and":find_key}, display_key).sort(sort_field, sort_dir).limit(10) 
 
     client.close()
 
@@ -219,15 +343,15 @@ def browse():
             status=404,
         )
 
-@app.route('/query_json/<imdbID>')
+@app.route("/query_json/<imdbID>")
 def read_from_mongo(imdbID):
 
     #connect to the mongo client
     client = MongoClient()
-    client = MongoClient('localhost', 27017)
+    client = MongoClient("localhost", 27017)
     db = client.senior_project
 
-    obj = db.movies.find_one({'imdbID': imdbID}, { "_id": 0, "DateAdded": 0, "LastChanged": 0 })
+    obj = db.movies.find_one({"imdbID": imdbID}, { "_id": 0, "DateAdded": 0, "LastChanged": 0 })
 
     client.close()
 
@@ -242,10 +366,12 @@ def read_from_mongo(imdbID):
             status=404
         )
 
+#################################################
+# Helper functions 
+#################################################
 
-
-''' this function is to create a lowercase space-less version of the title for easier searching
-Will also be used on the search terms to normalize them'''
+""" this function is to create a lowercase space-less version of the title for easier searching
+Will also be used on the search terms to normalize them"""
 def search_string(title):
     alphanum = ""
 
@@ -254,13 +380,12 @@ def search_string(title):
             alphanum += character.lower()
     return alphanum
 
-'''
+"""
 Wrapper function around this operation, in case it needs to change in the future
 https://regex101.com/r/ImE8BV/1/ - regex testing site
-'''
+"""
 def valid_imdb_id(id):
-    return re.match('tt\d{7}', id)
+    return re.match("tt\d{7}", id)
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
