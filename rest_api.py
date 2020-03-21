@@ -158,15 +158,25 @@ def get_resource():
 #################################################
 # API endpoints 
 #################################################
-@app.route("/video/<vid_name>", methods=["GET"])
-def serve_video(vid_name):
-    vid_path = os.path.join(MEDIA_PATH, vid_name)
+@app.route("/video/<vid_id>", methods=["GET"])
+def serve_video(vid_id):
+
+    #connect to the mongo client    
+    client = MongoClient()
+    client = MongoClient("localhost", 27017)
+    db = client.senior_project
+
+    obj = db.movies.find_one({"imdbID": vid_id}, {"Name", "Url"})
+
+    client.close()
+
+    vid_path = os.path.join(obj["Url"]) #MEDIA_PATH, 
     resp = make_response(send_file(vid_path, "video/mp4"))
     resp.headers["Content-Disposition"] = "inline"
     return resp
 
 @app.route("/search", methods=["GET"])
-@auth.login_required
+# @auth.login_required
 def search():
     title = request.args.get("title", None)
     year = request.args.get("year", None)
@@ -225,7 +235,7 @@ def search():
         ) 
 
 @app.route("/write_json", methods=["POST"])
-@auth.login_required
+# @auth.login_required
 def write_to_mongo():
 
     obj = json.loads(request.data) #get the sent object
@@ -247,7 +257,7 @@ def write_to_mongo():
         "Plot" :        obj["Plot"],
         "Poster" :      obj["Poster"],
         "Type" :        obj["Type"],
-        "URL"  :        obj["Url"], #MEDIA_PATH + relative-path
+        "Url"  :        obj["Url"], #MEDIA_PATH + relative-path
         "Genre" :       obj["Genre"],
         "Production" :  obj["Production"],
         "Ratings" :     obj["Ratings"],
