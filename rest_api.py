@@ -166,7 +166,7 @@ def serve_video(vid_name):
     return resp
 
 @app.route("/search", methods=["GET"])
-# @auth.login_required
+@auth.login_required
 def search():
     title = request.args.get("title", None)
     year = request.args.get("year", None)
@@ -225,7 +225,7 @@ def search():
         ) 
 
 @app.route("/write_json", methods=["POST"])
-# @auth.login_required
+@auth.login_required
 def write_to_mongo():
 
     obj = json.loads(request.data) #get the sent object
